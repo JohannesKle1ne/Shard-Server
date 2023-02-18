@@ -1,0 +1,4 @@
+git push heroku master
+heroku open
+
+npx tsc
