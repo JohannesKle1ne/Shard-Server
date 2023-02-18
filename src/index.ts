@@ -2,11 +2,20 @@
 
 import express, { Response, Request, Express } from "express";
 import { Server, WebSocketServer, WebSocket } from "ws";
+import { lineInterpolate } from "geometric";
+
+enum MessageType {
+  Unknown,
+  MatePosition,
+  EnemyPosition,
+}
 
 const PORT = process.env.PORT || 3000;
 const INDEX = "/index.html";
 
 const stateMapping: StateMapping[] = [];
+
+let lastPosition: Vector = { x: 0, y: 0 };
 
 function getState(client: WebSocket) {
   return stateMapping.find((m) => m.client === client)?.state;
@@ -17,6 +26,19 @@ function send(client: WebSocket, message: string) {
   if (state?.handShake) {
     client.send(message);
   }
+}
+
+function getMessageType(message: string) {
+  let messageObj;
+  try {
+    messageObj = JSON.parse(message);
+  } catch (error) {
+    return MessageType.Unknown;
+  }
+  if (messageObj.type == null) {
+    return MessageType.Unknown;
+  }
+  return messageObj.type;
 }
 
 const server = express()
@@ -40,6 +62,13 @@ wss.on("connection", (ws: WebSocket) => {
         state.handShake = true;
       }
     }
+
+    const type = getMessageType(`${message}`);
+    if (type === MessageType.MatePosition) {
+      const mPos: MatePosition = JSON.parse(`${message}`);
+      lastPosition = { x: mPos.x, y: mPos.y };
+    }
+
     wss.clients.forEach((client) => {
       //send the client the current message
       if (client != ws) {
@@ -48,38 +77,6 @@ wss.on("connection", (ws: WebSocket) => {
     });
   });
 });
-
-setInterval(() => {
-  wss.clients.forEach((client) => {
-    const { x, y } = enemyPath[pathIndex];
-    enemyPosition.x = x;
-    enemyPosition.y = y;
-    send(client, JSON.stringify(enemyPosition));
-    pathIndex = (pathIndex + 1) % enemyPath.length;
-  });
-}, 100);
-
-class ClientState {
-  handShake: boolean = false;
-}
-
-interface StateMapping {
-  client: WebSocket;
-  state: ClientState;
-}
-
-interface EnemyPosition {
-  x: number;
-  y: number;
-  enemyId: number;
-  type: MessageType;
-}
-
-enum MessageType {
-  Unknown,
-  MatePosition,
-  EnemyPosition,
-}
 
 const enemyPath = [
   { x: 50, y: 50 },
@@ -99,6 +96,46 @@ const enemyPosition: EnemyPosition = {
   enemyId: 1,
   type: MessageType.EnemyPosition,
 };
+
+setInterval(() => {
+  wss.clients.forEach((client) => {
+    const [newX, newY] = lineInterpolate([
+      [lastPosition.x, lastPosition.y],
+      [enemyPosition.x, enemyPosition.y],
+    ])(0.98);
+
+    enemyPosition.x = newX;
+    enemyPosition.y = newY;
+    send(client, JSON.stringify(enemyPosition));
+  });
+}, 100);
+
+class ClientState {
+  handShake: boolean = false;
+}
+
+interface StateMapping {
+  client: WebSocket;
+  state: ClientState;
+}
+
+interface EnemyPosition {
+  x: number;
+  y: number;
+  enemyId: number;
+  type: MessageType;
+}
+
+interface MatePosition {
+  x: number;
+  y: number;
+  type: MessageType;
+}
+
+interface Vector {
+  x: number;
+  y: number;
+}
 
 /* const { WebSocketServer } = require("ws");
 
