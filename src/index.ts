@@ -6,8 +6,9 @@ import { lineInterpolate } from "geometric";
 
 enum MessageType {
   Unknown,
-  MatePosition,
-  EnemyPosition,
+  PlayerPosition,
+  PlayerStartPosition,
+  BulletPosition,
 }
 
 const PORT = process.env.PORT || 3000;
@@ -55,16 +56,27 @@ wss.on("connection", (ws: WebSocket) => {
   ws.on("close", () => console.log("Client disconnected"));
   ws.on("message", (message) => {
     //for each websocket client
-    console.log(`${message}`);
-    if (`${message}` === "Hello!") {
+    const messageString = `${message}`;
+    console.log(messageString);
+    if (isNumeric(messageString)) {
       const state = getState(ws);
       if (state) {
         state.handShake = true;
       }
+      setTimeout(() => {
+        send(
+          ws,
+          `${JSON.stringify({
+            clientId: parseInt(messageString),
+            ...getRandomStartPosition(),
+            type: MessageType.PlayerStartPosition,
+          })}`
+        );
+      }, 1000);
     }
 
     const type = getMessageType(`${message}`);
-    if (type === MessageType.MatePosition) {
+    if (type === MessageType.PlayerPosition) {
       const mPos: MatePosition = JSON.parse(`${message}`);
       lastPosition = { x: mPos.x, y: mPos.y };
     }
@@ -78,37 +90,23 @@ wss.on("connection", (ws: WebSocket) => {
   });
 });
 
-const enemyPath = [
-  { x: 50, y: 50 },
-  { x: 75, y: 50 },
-  { x: 100, y: 50 },
-  { x: 100, y: 75 },
-  { x: 100, y: 100 },
-  { x: 75, y: 100 },
-  { x: 50, y: 100 },
-  { x: 50, y: 75 },
+const startPositions = [
+  { x: 50, y: 330 },
+  { x: 300, y: 330 },
 ];
-let pathIndex = 0;
 
-const enemyPosition: EnemyPosition = {
-  x: 20,
-  y: 20,
-  enemyId: 1,
-  type: MessageType.EnemyPosition,
-};
+function getRandomStartPosition() {
+  return startPositions[getRandom(2)];
+}
 
-setInterval(() => {
-  wss.clients.forEach((client) => {
-    const [newX, newY] = lineInterpolate([
-      [lastPosition.x, lastPosition.y],
-      [enemyPosition.x, enemyPosition.y],
-    ])(0.98);
+function getRandom(max: number) {
+  return Math.floor(Math.random() * max);
+}
 
-    enemyPosition.x = newX;
-    enemyPosition.y = newY;
-    send(client, JSON.stringify(enemyPosition));
-  });
-}, 100);
+function isNumeric(str: string) {
+  if (typeof str != "string") return false; // we only process strings!
+  return !isNaN(parseInt(str)); // ...and ensure strings of whitespace fail
+}
 
 class ClientState {
   handShake: boolean = false;
@@ -136,25 +134,3 @@ interface Vector {
   x: number;
   y: number;
 }
-
-/* const { WebSocketServer } = require("ws");
-
-const wss = new WebSocketServer({ port: 8080 });
-
-wss.on("listening", function open() {
-  console.log(`Server listenting on ws://localhost:8080`);
-});
-
-wss.on("connection", function connection(ws) {
-  ws.on("error", console.error);
-
-  ws.on("message", (message) => {
-    //for each websocket client
-    wss.clients.forEach((client) => {
-      //send the client the current message
-      client.send(`${message}`);
-    });
-  });
-
-  ws.send("something");
-}); */
