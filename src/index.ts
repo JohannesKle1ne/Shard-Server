@@ -17,12 +17,13 @@ const INDEX = "/index.html";
 const stateMapping: StateMapping[] = [];
 
 function getState(client: WebSocket) {
-  return stateMapping.find((m) => m.client === client)?.state;
+  const mapping = stateMapping.find((m) => m.client === client);
+  if (mapping) return mapping.state;
 }
 
 function send(client: WebSocket, message: string) {
   const state = getState(client);
-  if (state?.handShake) {
+  if (state && state.handShake) {
     console.log("Sent: " + message);
     client.send(message);
   }
