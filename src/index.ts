@@ -16,8 +16,6 @@ const INDEX = "/index.html";
 
 const stateMapping: StateMapping[] = [];
 
-let lastPosition: Vector = { x: 0, y: 0 };
-
 function getState(client: WebSocket) {
   return stateMapping.find((m) => m.client === client)?.state;
 }
@@ -25,6 +23,7 @@ function getState(client: WebSocket) {
 function send(client: WebSocket, message: string) {
   const state = getState(client);
   if (state?.handShake) {
+    console.log("Sent: " + message);
     client.send(message);
   }
 }
@@ -57,8 +56,8 @@ wss.on("connection", (ws: WebSocket) => {
   ws.on("message", (message) => {
     //for each websocket client
     const messageString = `${message}`;
-    console.log(messageString);
-    if (isNumeric(messageString)) {
+    console.log("Received: " + messageString);
+    /* if (isNumeric(messageString)) {
       const state = getState(ws);
       if (state) {
         state.handShake = true;
@@ -73,12 +72,42 @@ wss.on("connection", (ws: WebSocket) => {
           })}`
         );
       }, 1000);
+    } */
+
+    if (isNumeric(messageString)) {
+      const state = getState(ws);
+      if (state) {
+        state.handShake = true;
+        state.id = parseInt(messageString);
+      }
+      setTimeout(() => {
+        send(ws, `Welcome`);
+        wss.clients.forEach((client) => {
+          if (client != ws) {
+            const state = getState(client);
+            if (state) {
+              const { x, y } = state.lastPosition;
+              const pos: MatePosition = {
+                clientId: state.id,
+                x,
+                y,
+                type: MessageType.PlayerPosition,
+                sprite: "right",
+              };
+              send(ws, JSON.stringify(pos));
+            }
+          }
+        });
+      }, 500);
     }
 
     const type = getMessageType(`${message}`);
     if (type === MessageType.PlayerPosition) {
       const mPos: MatePosition = JSON.parse(`${message}`);
-      lastPosition = { x: mPos.x, y: mPos.y };
+      const state = getState(ws);
+      if (state) {
+        state.lastPosition = { x: mPos.x, y: mPos.y };
+      }
     }
 
     wss.clients.forEach((client) => {
@@ -110,6 +139,8 @@ function isNumeric(str: string) {
 
 class ClientState {
   handShake: boolean = false;
+  lastPosition: Vector = { x: 0, y: 0 };
+  id: number = -1;
 }
 
 interface StateMapping {
@@ -125,9 +156,11 @@ interface EnemyPosition {
 }
 
 interface MatePosition {
+  clientId: number;
   x: number;
   y: number;
   type: MessageType;
+  sprite: string;
 }
 
 interface Vector {
