@@ -1,184 +1,211 @@
+// Set strict mode to catch more errors
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-var express_1 = __importDefault(require("express"));
-var ws_1 = require("ws");
-var MessageType;
-(function (MessageType) {
-    MessageType[MessageType["Unknown"] = 0] = "Unknown";
-    MessageType[MessageType["PlayerPosition"] = 1] = "PlayerPosition";
-    MessageType[MessageType["PlayerStartPosition"] = 2] = "PlayerStartPosition";
-    MessageType[MessageType["BulletPosition"] = 3] = "BulletPosition";
-    MessageType[MessageType["PlayerDestroy"] = 4] = "PlayerDestroy";
-    MessageType[MessageType["BulletDestroy"] = 5] = "BulletDestroy";
-    MessageType[MessageType["BulletCollision"] = 6] = "BulletCollision";
-    MessageType[MessageType["Color"] = 7] = "Color";
-    MessageType[MessageType["BoxPosition"] = 8] = "BoxPosition";
-})(MessageType || (MessageType = {}));
-var PORT = process.env.PORT || 3000;
-var INDEX = "/index.html";
-var stateMapping = [];
-var colors = ["blue", "green", "red"];
-var colorIndex = 0;
-var getColor = function () {
-    colorIndex = (colorIndex + 1) % colors.length;
-    return colors[colorIndex];
-};
+// Import required packages
+const express_1 = __importDefault(require("express"));
+const ws_1 = require("ws");
+const promises_1 = __importDefault(require("fs/promises"));
+// Define the port number and index file
+const PORT = process.env.PORT || 3001;
+const INDEX = "/index.html";
+const oridHug = false;
+const ohannesHug = false;
+let stateMapping = [];
+var StreakState;
+(function (StreakState) {
+    StreakState[StreakState["Missing"] = 0] = "Missing";
+    StreakState[StreakState["Completed"] = 1] = "Completed";
+    StreakState[StreakState["Failed"] = 2] = "Failed";
+})(StreakState || (StreakState = {}));
+class ClientState {
+    constructor(name) {
+        this.name = name;
+        this.hugging = false;
+    }
+}
+const fun = () => __awaiter(void 0, void 0, void 0, function* () {
+    const state = yield getStreakState();
+    console.log(state);
+});
+fun();
+// Get the state for a specific client
 function getState(client) {
-    var mapping = stateMapping.find(function (m) { return m.client === client; });
+    const mapping = stateMapping.find((m) => m.client === client);
     if (mapping)
         return mapping.state;
 }
-function send(client, message) {
-    var state = getState(client);
-    if (state && state.handShake) {
-        console.log("Sent: " + message);
-        client.send(message);
-    }
+// Remove the state for a specific client
+function removeState(client) {
+    stateMapping = stateMapping.filter((m) => m.client !== client);
 }
-function getMessageType(message) {
-    var messageObj;
-    try {
-        messageObj = JSON.parse(message);
-    }
-    catch (error) {
-        return MessageType.Unknown;
-    }
-    if (messageObj.type == null) {
-        return MessageType.Unknown;
-    }
-    return messageObj.type;
+function bothHugging() {
+    if (stateMapping.length < 2)
+        return false;
+    return stateMapping.every((s) => s.state.hugging);
 }
-var server = (0, express_1.default)()
-    .use(function (req, res) {
-    return res.sendFile(INDEX, { root: __dirname });
-})
-    .listen(PORT, function () { return console.log("Listening on ".concat(PORT)); });
-var wss = new ws_1.Server({ server: server });
-setInterval(function () {
-    wss.clients.forEach(function (c) {
-        var state = getState(c);
-        if (state === null || state === void 0 ? void 0 : state.handShake) {
-            send(c, JSON.stringify({
-                type: MessageType.BoxPosition,
-                position: 600,
-                index: 0,
-            }));
+function getHugEntries() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const data = yield promises_1.default.readFile("./storage.json", { encoding: "utf8" });
+            const hugEntries = JSON.parse(data);
+            return hugEntries;
+        }
+        catch (err) {
+            console.log(err);
+            return [];
         }
     });
-}, 6000);
-setInterval(function () {
-    wss.clients.forEach(function (c) {
-        var state = getState(c);
-        if (state === null || state === void 0 ? void 0 : state.handShake) {
-            send(c, JSON.stringify({
-                type: MessageType.BoxPosition,
-                position: 550,
-                index: 1,
-            }));
+}
+function sendStreak() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const streak = yield getStreak();
+        wss.clients.forEach((c) => c.send(streak));
+    });
+}
+function getStreakState() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const hugEntries = yield getHugEntries();
+        const lastEntry = hugEntries.at(-1);
+        const now = getDayMonthYear();
+        if (lastEntry == null)
+            return StreakState.Missing;
+        const date1 = new Date(lastEntry.year, lastEntry.month, lastEntry.day);
+        const date2 = new Date(now.year, now.month, now.day);
+        const diffTime = Math.abs(date2.getTime() - date1.getTime());
+        const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+        console.log(diffHours + " hours");
+        if (diffHours < 24) {
+            return StreakState.Completed;
+        }
+        if (diffHours === 24) {
+            return StreakState.Missing;
+        }
+        if (diffHours > 24) {
+            return StreakState.Failed;
         }
     });
-}, 10000);
-setInterval(function () {
-    wss.clients.forEach(function (c) {
-        var state = getState(c);
-        if (state === null || state === void 0 ? void 0 : state.handShake) {
-            send(c, JSON.stringify({
-                type: MessageType.BoxPosition,
-                position: 420,
-                index: 2,
-            }));
-        }
+}
+function resetStreak() {
+    return __awaiter(this, void 0, void 0, function* () {
+        promises_1.default.writeFile("./storage.json", JSON.stringify([]));
     });
-}, 6000);
-wss.on("connection", function (ws) {
-    console.log("Client connected");
-    stateMapping.push({ client: ws, state: new ClientState() });
-    ws.on("close", function () { return console.log("Client disconnected"); });
-    ws.on("message", function (message) {
-        //for each websocket client
-        var messageString = "".concat(message);
+}
+function getStreak() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const hugEntries = yield getHugEntries();
+        return hugEntries.length;
+    });
+}
+function getDayMonthYear() {
+    const newDate = new Date();
+    return {
+        day: newDate.getDate(),
+        month: newDate.getMonth(),
+        year: newDate.getFullYear(),
+    };
+}
+function increaseHugStreak() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const hugEntries = yield getHugEntries();
+        hugEntries.push(getDayMonthYear());
+        promises_1.default.writeFile("./storage.json", JSON.stringify(hugEntries));
+    });
+}
+function sendSuccessfulHugging() {
+    wss.clients.forEach((c) => c.send("SuccessfulHugging"));
+}
+function setHugTimer(state) {
+    return __awaiter(this, void 0, void 0, function* () {
+        state.hugging = true;
+        if (bothHugging()) {
+            console.log("Both hugging!");
+            const state = yield getStreakState();
+            if (state === StreakState.Failed) {
+                yield resetStreak();
+            }
+            if (state === StreakState.Missing) {
+                yield increaseHugStreak();
+            }
+            sendSuccessfulHugging();
+            sendStreak();
+        }
+        setTimeout(() => {
+            state.hugging = false;
+        }, 1000);
+    });
+}
+const server = (0, express_1.default)()
+    .use((req, res) => res.sendFile(INDEX, { root: __dirname }))
+    .listen(PORT, () => {
+    console.log(`Listening on ${PORT}`);
+});
+const wss = new ws_1.Server({ server });
+wss.on("connection", (ws, req) => __awaiter(void 0, void 0, void 0, function* () {
+    /*   const ip = req.socket.remoteAddress;
+  
+    const lookup = geoip.lookup("201.201.215.193");
+    console.log(lookup);
+  
+    console.log("Client connected with: " + ip); */
+    if (wss.clients.size == 1) {
+        const newState = new ClientState("Orid");
+        stateMapping.push({ client: ws, state: newState });
+        ws.send(newState.name);
+    }
+    if (wss.clients.size == 2) {
+        const other = [...wss.clients].find((c) => c != ws);
+        if (other) {
+            const state = getState(other);
+            if (state != null) {
+                if (state.name == "Orid") {
+                    const newState = new ClientState("Ohannes");
+                    stateMapping.push({ client: ws, state: newState });
+                    ws.send(newState.name);
+                }
+                if (state.name == "Ohannes") {
+                    const newState = new ClientState("Orid");
+                    stateMapping.push({ client: ws, state: newState });
+                    ws.send(newState.name);
+                }
+            }
+        }
+    }
+    const state = yield getStreakState();
+    if (state === StreakState.Failed) {
+        resetStreak();
+    }
+    sendStreak();
+    if (wss.clients.size > 2) {
+        ws.close();
+    }
+    ws.on("close", () => {
+        removeState(ws);
+    });
+    ws.on("message", (message) => {
+        const messageString = `${message}`;
         console.log("Received: " + messageString);
-        if (isNumeric(messageString)) {
-            var state_1 = getState(ws);
-            if (state_1) {
-                state_1.handShake = true;
-                state_1.id = parseInt(messageString);
-                state_1.color = getColor();
-                setTimeout(function () {
-                    send(ws, JSON.stringify({
-                        clientId: state_1.id,
-                        type: MessageType.Color,
-                        color: state_1.color,
-                    }));
-                    wss.clients.forEach(function (client) {
-                        if (client != ws) {
-                            var state_2 = getState(client);
-                            if (state_2) {
-                                var _a = state_2.lastPosition, x = _a.x, y = _a.y;
-                                var pos = {
-                                    clientId: state_2.id,
-                                    x: x,
-                                    y: y,
-                                    type: MessageType.PlayerPosition,
-                                    sprite: state_2.lastSprite,
-                                };
-                                send(ws, JSON.stringify(pos));
-                            }
-                        }
-                    });
-                }, 500);
-            }
-        }
-        var type = getMessageType("".concat(message));
-        if (type === MessageType.PlayerPosition) {
-            var mPos = JSON.parse("".concat(message));
-            var state = getState(ws);
-            if (state) {
-                state.lastPosition = { x: mPos.x, y: mPos.y };
-                state.lastSprite = mPos.sprite;
-            }
-        }
-        wss.clients.forEach(function (client) {
-            //send the client the current message
+        wss.clients.forEach((client) => {
             if (client != ws) {
-                send(client, "".concat(message));
+                client.send(`${message}`);
             }
         });
+        if (messageString == "Hug") {
+            const state = getState(ws);
+            if (state) {
+                setHugTimer(state);
+            }
+        }
     });
-});
-/* let index = 0;
-setInterval(() => {
-  wss.clients.forEach((client) => {
-    const position = path[index];
-    send(client, JSON.stringify(position));
-    index = (index + 1) % path.length;
-  });
-}, 100); */
-var startPositions = [
-    { x: 50, y: 330 },
-    { x: 300, y: 330 },
-];
-function getRandomStartPosition() {
-    return startPositions[getRandom(2)];
-}
-function getRandom(max) {
-    return Math.floor(Math.random() * max);
-}
-function isNumeric(str) {
-    if (typeof str != "string")
-        return false; // we only process strings!
-    return !isNaN(parseInt(str)); // ...and ensure strings of whitespace fail
-}
-var ClientState = /** @class */ (function () {
-    function ClientState() {
-        this.handShake = false;
-        this.lastPosition = { x: 0, y: 0 };
-        this.lastSprite = "blueright1";
-        this.id = -1;
-        this.color = "blue";
-    }
-    return ClientState;
-}());
+}));
