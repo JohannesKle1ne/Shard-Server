@@ -77,7 +77,7 @@ function sendStreak() {
 function getStreakState() {
     return __awaiter(this, void 0, void 0, function* () {
         const hugEntries = yield getHugEntries();
-        const lastEntry = hugEntries.at(-1);
+        const lastEntry = hugEntries[hugEntries.length - 1];
         const now = getDayMonthYear();
         if (lastEntry == null)
             return StreakState.Missing;
