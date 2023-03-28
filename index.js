@@ -16,7 +16,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // Import required packages
 const express_1 = __importDefault(require("express"));
 const ws_1 = require("ws");
-const promises_1 = __importDefault(require("fs/promises"));
+const fs_1 = require("fs");
 // Define the port number and index file
 const PORT = process.env.PORT || 3001;
 const INDEX = "/index.html";
@@ -58,7 +58,7 @@ function bothHugging() {
 function getHugEntries() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const data = yield promises_1.default.readFile("./storage.json", { encoding: "utf8" });
+            const data = yield fs_1.promises.readFile("./storage.json", { encoding: "utf8" });
             const hugEntries = JSON.parse(data);
             return hugEntries;
         }
@@ -99,7 +99,7 @@ function getStreakState() {
 }
 function resetStreak() {
     return __awaiter(this, void 0, void 0, function* () {
-        promises_1.default.writeFile("./storage.json", JSON.stringify([]));
+        fs_1.promises.writeFile("./storage.json", JSON.stringify([]));
     });
 }
 function getStreak() {
@@ -120,7 +120,7 @@ function increaseHugStreak() {
     return __awaiter(this, void 0, void 0, function* () {
         const hugEntries = yield getHugEntries();
         hugEntries.push(getDayMonthYear());
-        promises_1.default.writeFile("./storage.json", JSON.stringify(hugEntries));
+        fs_1.promises.writeFile("./storage.json", JSON.stringify(hugEntries));
     });
 }
 function sendSuccessfulHugging() {
