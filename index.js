@@ -80,7 +80,14 @@ function sendTotalHugs() {
 }
 function sendCurrentTime() {
     return __awaiter(this, void 0, void 0, function* () {
-        wss.clients.forEach((c) => c.send(JSON.stringify(getDayMonthYear())));
+        const newDate = new Date();
+        const time = {
+            hours: newDate.getHours(),
+            day: newDate.getDate(),
+            month: newDate.getMonth(),
+            year: newDate.getFullYear(),
+        };
+        wss.clients.forEach((c) => c.send(JSON.stringify(time)));
     });
 }
 function getStreakState() {
