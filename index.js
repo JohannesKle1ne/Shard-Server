@@ -20,8 +20,6 @@ const fs_1 = require("fs");
 // Define the port number and index file
 const PORT = process.env.PORT || 3001;
 const INDEX = "/index.html";
-const oridHug = false;
-const ohannesHug = false;
 let stateMapping = [];
 var StreakState;
 (function (StreakState) {
@@ -71,7 +69,18 @@ function getHugEntries() {
 function sendStreak() {
     return __awaiter(this, void 0, void 0, function* () {
         const streak = yield getStreak();
-        wss.clients.forEach((c) => c.send(streak));
+        wss.clients.forEach((c) => c.send(JSON.stringify({ streak })));
+    });
+}
+function sendTotalHugs() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const hugs = yield getTotalHugs();
+        wss.clients.forEach((c) => c.send(JSON.stringify({ hugs })));
+    });
+}
+function sendCurrentTime() {
+    return __awaiter(this, void 0, void 0, function* () {
+        wss.clients.forEach((c) => c.send(JSON.stringify(getDayMonthYear())));
     });
 }
 function getStreakState() {
@@ -102,10 +111,45 @@ function resetStreak() {
         fs_1.promises.writeFile("./storage.json", JSON.stringify([]));
     });
 }
-function getStreak() {
+function getTotalHugs() {
     return __awaiter(this, void 0, void 0, function* () {
         const hugEntries = yield getHugEntries();
         return hugEntries.length;
+    });
+}
+function getStreak() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const getDifference = (hugEntry1, hugEntry2) => {
+            const date1 = new Date(hugEntry1.year, hugEntry1.month, hugEntry1.day);
+            const date2 = new Date(hugEntry2.year, hugEntry2.month, hugEntry2.day);
+            return Math.abs(date2.getTime() - date1.getTime());
+        };
+        const hugEntries = yield getHugEntries();
+        if (hugEntries.length > 0) {
+            hugEntries.reverse();
+            let interrupted = false;
+            let newest = hugEntries[0];
+            let oldest = hugEntries[0];
+            hugEntries.reduce((first, second) => {
+                const diffTime = getDifference(first, second);
+                const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+                console.log(diffHours);
+                if (diffHours <= 24 && !interrupted) {
+                    console.log(second);
+                    oldest = second;
+                }
+                else {
+                    interrupted = true;
+                }
+                return second;
+            });
+            console.log(oldest);
+            console.log(newest);
+            const diffTime = getDifference(newest, oldest);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays + 1;
+        }
+        return 0;
     });
 }
 function getDayMonthYear() {
@@ -131,15 +175,17 @@ function setHugTimer(state) {
         state.hugging = true;
         if (bothHugging()) {
             console.log("Both hugging!");
-            const state = yield getStreakState();
-            if (state === StreakState.Failed) {
-                yield resetStreak();
+            //const state = await getStreakState();
+            /*     if (state === StreakState.Failed) {
+              await resetStreak();
             }
             if (state === StreakState.Missing) {
-                yield increaseHugStreak();
-            }
+              
+            } */
+            yield increaseHugStreak();
             sendSuccessfulHugging();
             sendStreak();
+            sendTotalHugs();
         }
         setTimeout(() => {
             state.hugging = false;
@@ -182,11 +228,13 @@ wss.on("connection", (ws, req) => __awaiter(void 0, void 0, void 0, function* ()
             }
         }
     }
-    const state = yield getStreakState();
-    if (state === StreakState.Failed) {
-        resetStreak();
-    }
+    //const state = await getStreakState();
+    /*   if (state === StreakState.Failed) {
+      resetStreak();
+    } */
     sendStreak();
+    sendTotalHugs();
+    sendCurrentTime();
     if (wss.clients.size > 2) {
         ws.close();
     }
