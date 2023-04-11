@@ -75,8 +75,8 @@ var StreakState;
     StreakState[StreakState["Failed"] = 2] = "Failed";
 })(StreakState || (StreakState = {}));
 class ClientState {
-    constructor(name) {
-        this.name = name;
+    constructor() {
+        this.name = null;
         this.hugging = false;
     }
 }
@@ -170,7 +170,7 @@ function getStreakState() {
         const date2 = new Date(now.year, now.month, now.day);
         const diffTime = Math.abs(date2.getTime() - date1.getTime());
         const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
-        console.log(diffHours + " hours");
+        //console.log(diffHours + " hours");
         if (diffHours < 24) {
             return StreakState.Completed;
         }
@@ -209,9 +209,9 @@ function getStreak() {
             hugEntries.reduce((first, second) => {
                 const diffTime = getDifference(first, second);
                 const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
-                console.log(diffHours);
+                // console.log(diffHours);
                 if (diffHours <= 24 && !interrupted) {
-                    console.log(second);
+                    // console.log(second);
                     oldest = second;
                 }
                 else {
@@ -219,8 +219,8 @@ function getStreak() {
                 }
                 return second;
             });
-            console.log(oldest);
-            console.log(newest);
+            //console.log(oldest);
+            //console.log(newest);
             const diffTime = getDifference(newest, oldest);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             return diffDays + 1;
@@ -274,6 +274,9 @@ const server = (0, express_1.default)()
     console.log(`Listening on ${PORT}`);
 });
 const wss = new ws_1.Server({ server });
+/* const sendPartner = (ws: WebSocket) => {
+  
+}; */
 wss.on("connection", (ws, req) => __awaiter(void 0, void 0, void 0, function* () {
     /*   const ip = req.socket.remoteAddress;
   
@@ -281,29 +284,30 @@ wss.on("connection", (ws, req) => __awaiter(void 0, void 0, void 0, function* ()
     console.log(lookup);
   
     console.log("Client connected with: " + ip); */
-    if (wss.clients.size == 1) {
-        const newState = new ClientState("Orid");
-        stateMapping.push({ client: ws, state: newState });
-        ws.send(newState.name);
-    }
-    if (wss.clients.size == 2) {
-        const other = [...wss.clients].find((c) => c != ws);
-        if (other) {
-            const state = getState(other);
-            if (state != null) {
-                if (state.name == "Orid") {
-                    const newState = new ClientState("Ohannes");
-                    stateMapping.push({ client: ws, state: newState });
-                    ws.send(newState.name);
-                }
-                if (state.name == "Ohannes") {
-                    const newState = new ClientState("Orid");
-                    stateMapping.push({ client: ws, state: newState });
-                    ws.send(newState.name);
-                }
-            }
+    const newState = new ClientState();
+    stateMapping.push({ client: ws, state: newState });
+    /*   if (wss.clients.size == 1) {
+      
+      ws.send(newState.name);
+    } */
+    /* if (wss.clients.size == 2) {
+      const other = [...wss.clients].find((c) => c != ws);
+      if (other) {
+        const state = getState(other);
+        if (state != null) {
+          if (state.name == "Orid") {
+            const newState = new ClientState("Ohannes");
+            stateMapping.push({ client: ws, state: newState });
+            ws.send(newState.name);
+          }
+          if (state.name == "Ohannes") {
+            const newState = new ClientState("Orid");
+            stateMapping.push({ client: ws, state: newState });
+            ws.send(newState.name);
+          }
         }
-    }
+      }
+    } */
     //const state = await getStreakState();
     /*   if (state === StreakState.Failed) {
       resetStreak();
@@ -311,24 +315,56 @@ wss.on("connection", (ws, req) => __awaiter(void 0, void 0, void 0, function* ()
     sendStreak();
     sendTotalHugs();
     sendCurrentTime();
-    if (wss.clients.size > 2) {
-        ws.close();
-    }
+    /*   if (wss.clients.size > 2) {
+      ws.close();
+    } */
     ws.on("close", () => {
         removeState(ws);
+        console.log("found close");
+        wss.clients.forEach((c) => {
+            c.send("No Partner");
+        });
     });
     ws.on("message", (message) => {
         const messageString = `${message}`;
         console.log("Received: " + messageString);
         wss.clients.forEach((client) => {
             if (client != ws) {
-                client.send(`${message}`);
+                const state = getState(client);
+                if (state === null || state === void 0 ? void 0 : state.name) {
+                    client.send(`${message}`);
+                }
             }
         });
         if (messageString == "Hug") {
             const state = getState(ws);
             if (state) {
                 setHugTimer(state);
+            }
+        }
+        if (messageString == "Orid" || messageString == "Ohannes") {
+            if ([...wss.clients].some((c) => {
+                const state = getState(c);
+                return (state === null || state === void 0 ? void 0 : state.name) === messageString;
+            })) {
+                ws.close();
+                return;
+            }
+            const state = getState(ws);
+            if (state) {
+                state.name = messageString;
+                ws.send("Identified");
+                console.log("Identified");
+                wss.clients.forEach((client) => {
+                    if (client != ws) {
+                        const state = getState(client);
+                        if (state === null || state === void 0 ? void 0 : state.name) {
+                            ws.send(`Partner`);
+                            client.send(`Partner`);
+                            console.log("Partner sent");
+                        }
+                    }
+                });
             }
         }
     });
