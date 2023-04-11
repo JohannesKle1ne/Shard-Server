@@ -17,6 +17,53 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const ws_1 = require("ws");
 const fs_1 = require("fs");
+const sequelize_1 = require("sequelize");
+const sequelize = new sequelize_1.Sequelize("initial_hug", "postgres", "postgres", {
+    host: "database-hug.csehfyfmn8dh.eu-north-1.rds.amazonaws.com",
+    port: 5432,
+    dialect: "postgres",
+    logging: false,
+    pool: {
+        max: 10,
+        min: 0,
+        idle: 10000,
+    },
+});
+// Test the connection
+(() => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        yield sequelize.authenticate();
+        console.log("Connection has been established successfully.");
+    }
+    catch (error) {
+        console.error("Unable to connect to the database:", error);
+    }
+}))();
+const Streak = sequelize.define("Streak", {
+    streak: {
+        type: sequelize_1.DataTypes.TEXT,
+        allowNull: false,
+    },
+}, { freezeTableName: true });
+const getHugEntriesFromDB = () => __awaiter(void 0, void 0, void 0, function* () {
+    //await Streak.sync({ force: true });
+    // Retrieve the entry from the Streak table
+    const streak = yield Streak.findOne({
+        where: {
+            id: 5,
+        },
+    });
+    /*   const jane = await Streak.create({ streak: "[]" });
+    console.log(jane.toJSON()); */
+    if (streak && "streak" in streak && typeof streak.streak === "string") {
+        const hugEntries = JSON.parse(streak.streak);
+        return hugEntries;
+        //streak.save();
+        //const hugEntries:HugEntry[]= streak.streak
+        // return;
+    }
+    //console.log(streak?.toJSON());
+});
 // Define the port number and index file
 const PORT = process.env.PORT || 3001;
 const INDEX = "/index.html";
@@ -33,11 +80,12 @@ class ClientState {
         this.hugging = false;
     }
 }
-const fun = () => __awaiter(void 0, void 0, void 0, function* () {
-    const state = yield getStreakState();
-    console.log(state);
-});
-fun();
+/* const fun = async () => {
+  const state = await getStreakState();
+  console.log(state);
+};
+
+fun(); */
 // Get the state for a specific client
 function getState(client) {
     const mapping = stateMapping.find((m) => m.client === client);
@@ -55,14 +103,35 @@ function bothHugging() {
 }
 function getHugEntries() {
     return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const data = yield fs_1.promises.readFile("./storage.json", { encoding: "utf8" });
-            const hugEntries = JSON.parse(data);
+        const hugEntries = yield getHugEntriesFromDB();
+        if (hugEntries != null) {
             return hugEntries;
         }
-        catch (err) {
-            console.log(err);
+        else {
             return [];
+        }
+        /*  try {
+          const data = await fs.readFile("./storage.json", { encoding: "utf8" });
+          const hugEntries: HugEntry[] = JSON.parse(data);
+          return hugEntries;
+        } catch (err) {
+          console.log(err);
+          return [];
+        } */
+    });
+}
+function setHugEntries(hugEntries) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const streak = yield Streak.findOne({
+            where: {
+                id: 5,
+            },
+        });
+        /*   const jane = await Streak.create({ streak: "[]" });
+        console.log(jane.toJSON()); */
+        if (streak && "streak" in streak && typeof streak.streak === "string") {
+            streak.streak = JSON.stringify(hugEntries);
+            yield streak.save();
         }
     });
 }
@@ -171,7 +240,7 @@ function increaseHugStreak() {
     return __awaiter(this, void 0, void 0, function* () {
         const hugEntries = yield getHugEntries();
         hugEntries.push(getDayMonthYear());
-        fs_1.promises.writeFile("./storage.json", JSON.stringify(hugEntries));
+        yield setHugEntries(hugEntries);
     });
 }
 function sendSuccessfulHugging() {
